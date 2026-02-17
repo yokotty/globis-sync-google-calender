@@ -7,6 +7,16 @@
   const parser = window.GlobisScheduleParser;
 
   const log = (...args) => console.log(LOG_PREFIX, ...args);
+  const sendMessage = (message) =>
+    new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(response);
+      });
+    });
 
   const injectScript = () => {
     const script = document.createElement("script");
@@ -78,6 +88,37 @@
     });
   };
 
+  const syncSchedulesToCalendar = async (row, parsedSchedules) => {
+    const schedules = Array.isArray(parsedSchedules) ? parsedSchedules : [];
+    if (!schedules.length) {
+      log("Skip calendar sync: no parsed schedules");
+      return;
+    }
+
+    const confirmText = `Googleカレンダーに ${schedules.length} 件の予定を作成します。続行しますか？`;
+    if (!window.confirm(confirmText)) {
+      log("Calendar sync canceled by user");
+      return;
+    }
+
+    log("Creating Google Calendar events...");
+    const response = await sendMessage({
+      type: "GLOBIS_CREATE_CALENDAR_EVENTS",
+      payload: {
+        row,
+        sessions: schedules,
+        sourceUrl: window.location.href,
+      },
+    });
+
+    if (!response || !response.ok) {
+      const message = response?.error || "Unknown error";
+      throw new Error(message);
+    }
+
+    log("Google Calendar events created:", response.result);
+  };
+
   window.addEventListener("globis-schedule-network", (ev) => {
     const detail = ev.detail || {};
     networkEvents.push(detail);
@@ -112,6 +153,9 @@
           if (parser && typeof parser.parseScheduleCandidates === "function") {
             const parsed = parser.parseScheduleCandidates(modalSchedules, "JST");
             log("Parsed schedule entries:", parsed);
+            syncSchedulesToCalendar(row, parsed).catch((err) => {
+              log("Calendar sync failed:", err.message);
+            });
           } else {
             log("Parser is not available");
           }

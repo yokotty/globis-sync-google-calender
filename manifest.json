@@ -1,8 +1,17 @@
 {
   "manifest_version": 3,
   "name": "GLOBIS Schedule Extractor PoC",
-  "version": "0.1.0",
-  "description": "Extract class schedule data when calendar icon is clicked.",
+  "version": "0.2.0",
+  "description": "Extract class schedules and create Google Calendar events.",
+  "permissions": ["identity"],
+  "host_permissions": ["https://www.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "REPLACE_WITH_YOUR_CHROME_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/calendar.events"]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://vc.globis.ac.jp/my/*"],
