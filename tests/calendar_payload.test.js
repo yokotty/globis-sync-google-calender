@@ -40,3 +40,18 @@ test("buildCalendarEvents builds Google Calendar event bodies", () => {
   assert.equal(events[0].end.dateTime, "2026-01-08T22:00:00");
   assert.equal(events[0].extendedProperties.private.globisKey.includes("globis|"), true);
 });
+
+test("buildCalendarEvents omits Day suffix when dayNo is 0", () => {
+  const row = {
+    科目: "G-CHALLENGE 2025本選見学（東京校会場参加）",
+    開催場所: "",
+    クラス: "",
+  };
+  const sessions = [
+    { date: "2026-02-01", start: "12:30", end: "18:30", timezone: "JST", dayNo: 0 },
+  ];
+
+  const events = payload.buildCalendarEvents(row, sessions, "https://vc.globis.ac.jp/my/ev/030");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].summary, "G-CHALLENGE 2025本選見学（東京校会場参加）");
+});

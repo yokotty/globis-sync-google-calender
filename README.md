@@ -1,32 +1,67 @@
-# GLOBIS Schedule Extractor + Google Calendar PoC
+# GLOBIS Google Calendar Sync (Chrome Extension PoC)
 
-このPoCは、`https://vc.globis.ac.jp/my/*` 上で「初回開講日セルのカレンダーアイコン」をクリックしたときに、以下を Chrome DevTools Console に出力します。
+GLOBIS Virtual Campus（`https://vc.globis.ac.jp/my/*`）で、表示中の予定を Google カレンダーへ登録する Chrome 拡張です。
 
-- クリックされた行のテーブル情報（科目、開講期、開催場所、クラス、講師、初回開講日、曜日、時間）
-- クリック前後に発生した関連ネットワーク（fetch/XHR）のURL・ステータス・レスポンス先頭
-- 開いたモーダル/ダイアログに含まれる日付・時刻テキスト候補
-- 抽出したスケジュールの構造化結果 `[{date,start,end,timezone,dayNo}]`
-- ユーザー確認後、Googleカレンダーへ予定作成（PoC）
+## 対応ページ
+
+1. 申込・履修（クラス一覧）
+- 「初回開講日」のカレンダーアイコンをクリック後、開講スケジュールモーダル下部に
+  `Googleカレンダーにスケジュール登録` を表示
+- クリックで Day1..N をまとめて登録
+
+2. 所属クラス > クラス詳細
+- 各 Day の「授業に参加」 > 「開催日時」欄の下に
+  `Googleカレンダー登録` を表示（その Day 1件を登録）
+- ページ下部に `Googleカレンダーに一括登録` を表示（全 Day を登録）
+
+3. 申込み済イベントページ
+- 各イベントの「開催日時」欄の下に
+  `Googleカレンダー登録` を表示（そのイベント 1件を登録）
+
+## タイトル形式
+
+- クラス詳細（Day）
+  - `（科目） （開催場所） （クラス） DayN`
+  - 例: `(MBA)人材マネジメント 東京 Aクラス Day4`
+- イベント（単発）
+  - `（イベント名）`
 
 ## Google OAuth 設定（必須）
 
-1. Google Cloud Console で OAuth クライアント（Chrome 拡張）を作成
-2. 拡張機能IDを固定化して、そのIDでOAuthクライアントを紐付け
-3. `manifest.json` の `oauth2.client_id` を実値に置き換える
-4. スコープは `https://www.googleapis.com/auth/calendar.events`
+`manifest.json` に OAuth クライアントIDとスコープを設定します。
 
-## 使い方
+- `oauth2.client_id`: Chrome 拡張用 OAuth クライアントID
+- `oauth2.scopes`: `https://www.googleapis.com/auth/calendar.events`
+
+現在の設定値:
+- `989370473965-8usmc90m8ttts3b1qlfi9he955sgkn2q.apps.googleusercontent.com`
+
+## セットアップ
 
 1. Chromeで `chrome://extensions` を開く
-2. 右上の「デベロッパーモード」をON
+2. 「デベロッパーモード」を ON
 3. 「パッケージ化されていない拡張機能を読み込む」でこのフォルダを選択
-4. GLOBISの対象ページを開く（または再読み込み）
-5. DevTools Console を開く
-6. 初回開講日のカレンダーアイコンをクリック
-7. `[GLOBIS PoC]` で始まるログを確認
+4. 対象ページを再読み込み
 
-## 補足
+## 動作確認
 
-- クリック後に「Googleカレンダーに n 件作成しますか？」ダイアログが表示されます。
-- OAuth未設定時は作成に失敗し、コンソールにエラーを表示します。
-- 実運用に向けては、重複作成回避（既存イベント照合）を追加してください。
+1. 対象ページで登録リンクをクリック
+2. 初回のみ Google 認可画面で許可
+3. 登録後、Google カレンダー側に予定が作成されることを確認
+
+## 開発メモ
+
+- 予定作成は `background.js` で Google Calendar API `events.insert` を呼び出し
+- OAuth は `chrome.identity.getAuthToken` を使用
+- タイムゾーンは `JST -> Asia/Tokyo` で変換
+
+## テスト
+
+```bash
+node --test tests/*.test.js
+```
+
+## 既知の制約
+
+- 重複登録防止（既存イベント照合）は未実装
+- ページDOM変更時はセレクタ調整が必要になる可能性あり

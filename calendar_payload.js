@@ -36,8 +36,12 @@
   };
 
   const buildDescription = (row, session, sourceUrl) => {
+    const dayLine =
+      Number.isFinite(Number(session.dayNo)) && Number(session.dayNo) > 0
+        ? `Day ${session.dayNo}`
+        : "";
     const lines = [
-      `Day ${session.dayNo}`,
+      dayLine,
       row["講師"] ? `講師: ${row["講師"]}` : "",
       row["クラス"] ? `クラス: ${row["クラス"]}` : "",
       row["開講期"] ? `開講期: ${row["開講期"]}` : "",
@@ -64,7 +68,11 @@
 
     return list.map((session) => {
       const timeZone = TZ_MAP[session.timezone] || "Asia/Tokyo";
-      const summaryParts = [row["科目"] || "GLOBIS Class", row["開催場所"], classLabel(row["クラス"]), `Day${session.dayNo}`].filter(Boolean);
+      const dayPart =
+        Number.isFinite(Number(session.dayNo)) && Number(session.dayNo) > 0
+          ? `Day${session.dayNo}`
+          : "";
+      const summaryParts = [row["科目"] || "GLOBIS Class", row["開催場所"], classLabel(row["クラス"]), dayPart].filter(Boolean);
       const summary = summaryParts.join(" ");
       const location = "";
       const description = buildDescription(row, session, sourceUrl);
