@@ -2,7 +2,6 @@
   if (window.__globisSchedulePocInstalled) return;
   window.__globisSchedulePocInstalled = true;
 
-  const LOG_PREFIX = "[GLOBIS PoC]";
   const networkEvents = [];
   const parser = window.GlobisScheduleParser;
   const communityParser = window.GlobisCommunityParser;
@@ -14,7 +13,7 @@
   let latestSyncContext = null;
   let detailInjectTimer = null;
 
-  const log = (...args) => console.log(LOG_PREFIX, ...args);
+  const log = () => {};
   const sendMessage = (message) =>
     new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(message, (response) => {
