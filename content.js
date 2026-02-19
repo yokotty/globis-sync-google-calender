@@ -86,6 +86,15 @@
     return { subject, term };
   };
 
+  const buildSocialEventTitle = (title) => {
+    const base = normalize(title);
+    if (!base) return "";
+    const subject = normalize(getPageMeta().subject);
+    if (!subject) return base;
+    if (base.startsWith(subject)) return base;
+    return `${subject} ${base}`;
+  };
+
   const parseDaySessionFromAccordion = (accordion) => {
     const dayHead = normalize(accordion.querySelector("h3")?.textContent || "");
     const dayNo = Number((dayHead.match(/Day\s*(\d+)/i) || [])[1] || 0);
@@ -393,6 +402,7 @@
       mountEl: card.querySelector("div.font-medium.text-xs.leading-\\[18px\\].mb-2") || card,
       row: {
         ...parsed.row,
+        科目: buildSocialEventTitle(parsed.row["科目"]),
         関連URL: relatedUrl,
       },
       session: parsed.session,
@@ -436,6 +446,7 @@
       mountEl: dateLineEl || infoBlock,
       row: {
         ...parsed.row,
+        科目: buildSocialEventTitle(parsed.row["科目"]),
         関連URL: relatedUrl,
       },
       session: parsed.session,
