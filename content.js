@@ -5,10 +5,12 @@
   const LOG_PREFIX = "[GLOBIS PoC]";
   const networkEvents = [];
   const parser = window.GlobisScheduleParser;
+  const communityParser = window.GlobisCommunityParser;
   const ACTION_ID = "globis-calendar-sync-action";
   const DAY_ACTION_CLASS = "globis-day-calendar-action";
   const BULK_ACTION_ID = "globis-bulk-calendar-action";
   const EVENT_ACTION_CLASS = "globis-event-calendar-action";
+  const SOCIAL_ACTION_CLASS = "globis-social-calendar-action";
   let latestSyncContext = null;
   let detailInjectTimer = null;
 
@@ -60,6 +62,20 @@
     const m = String(dateText || "").match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
     if (!m) return "";
     return `${m[1]}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
+  };
+
+  const parseLooseDateTime = (raw) =>
+    communityParser?.parseLooseDateTime?.(raw, 60) || null;
+
+  const extractRelatedUrl = (root) => {
+    if (!root) return "";
+    const links = [...root.querySelectorAll("a[href]")];
+    for (const link of links) {
+      const href = normalize(link.getAttribute("href") || "");
+      if (!href) continue;
+      if (/^https?:\/\//i.test(href)) return href;
+    }
+    return "";
   };
 
   const getPageMeta = () => {
@@ -291,6 +307,46 @@
     return wrap;
   };
 
+  const createSocialActionElement = (onClick) => {
+    const wrap = document.createElement("div");
+    wrap.className = SOCIAL_ACTION_CLASS;
+    wrap.style.marginTop = "8px";
+
+    const link = document.createElement("a");
+    link.href = "#";
+    link.textContent = "Googleカレンダー登録";
+    link.style.fontSize = "12px";
+    link.style.fontWeight = "700";
+    link.style.color = "#0E357F";
+    link.style.textDecoration = "underline";
+    link.style.cursor = "pointer";
+
+    const status = document.createElement("span");
+    status.style.marginLeft = "8px";
+    status.style.fontSize = "12px";
+    status.style.color = "#666";
+
+    const setBusy = (busy, text) => {
+      link.style.pointerEvents = busy ? "none" : "auto";
+      link.style.opacity = busy ? "0.6" : "1";
+      status.textContent = text || "";
+    };
+
+    link.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      try {
+        setBusy(true, "登録中...");
+        await onClick();
+        setBusy(false, "登録しました");
+      } catch (err) {
+        setBusy(false, `失敗: ${err.message}`);
+      }
+    });
+
+    wrap.append(link, status);
+    return wrap;
+  };
+
   const parseEventSection = (section) => {
     const title = normalize(section.querySelector("h2")?.textContent || "");
     if (!title) return null;
@@ -337,6 +393,125 @@
       const action = createEventActionElement(() => syncSchedulesToCalendar(row, [session]));
       mountEl.appendChild(action);
       log("Injected event calendar action:", { title: row["科目"], session });
+    }
+  };
+
+  const parseSocialCard = (card) => {
+    const title = normalize(card.querySelector("div.font-bold.text-sm")?.textContent || "");
+    if (!title) return null;
+
+    const lines = [...card.querySelectorAll("p")]
+      .map((el) => normalize(el.textContent))
+      .filter(Boolean);
+    const dateLine = lines.find((s) => s.startsWith("開催日時："));
+    if (!dateLine) return null;
+    const placeLine = lines.find((s) => s.startsWith("開催場所：")) || "";
+
+    const raw = dateLine.replace(/^開催日時：/, "").trim();
+    const session = parseLooseDateTime(raw);
+    if (!session) return null;
+    const location = placeLine.replace(/^開催場所：/, "").trim();
+    const relatedUrl =
+      extractRelatedUrl(card.querySelector(".editor-content")) || extractRelatedUrl(card);
+
+    return {
+      mountEl: card.querySelector("div.font-medium.text-xs.leading-\\[18px\\].mb-2") || card,
+      row: {
+        科目: title,
+        開催場所: location,
+        クラス: "",
+        関連URL: relatedUrl,
+      },
+      session: { ...session, dayNo: 0 },
+    };
+  };
+
+  const injectSocialActions = () => {
+    const socialHeaders = [...document.querySelectorAll("span")]
+      .filter((el) => normalize(el.textContent) === "勉強会 ・ 懇親会");
+    if (!socialHeaders.length) return;
+
+    const cards = [...document.querySelectorAll("div.bg-gray1.rounded-lg.text-black2.pt-4.px-4.pb-5")];
+    if (!cards.length) return;
+
+    for (const card of cards) {
+      const parsed = parseSocialCard(card);
+      if (!parsed) continue;
+      const { mountEl, row, session } = parsed;
+      if (mountEl.querySelector(`.${SOCIAL_ACTION_CLASS}`)) continue;
+
+      const action = createSocialActionElement(() => syncSchedulesToCalendar(row, [session]));
+      mountEl.appendChild(action);
+      log("Injected social calendar action:", { title: row["科目"], session });
+    }
+  };
+
+  const parseCommunityPostCard = (card) => {
+    const title = normalize(
+      card.querySelector(".flex.justify-start.items-center.font-bold.text-lg")?.textContent || ""
+    );
+    if (!title) return null;
+
+    const buttons = [...card.querySelectorAll("button")]
+      .map((b) => normalize(b.textContent));
+    if (!buttons.includes("参加") || !buttons.includes("不参加")) return null;
+
+    const infoBlock = [...card.querySelectorAll("div")]
+      .find((el) => normalize(el.textContent).includes("開催日時："));
+    if (!infoBlock) return null;
+
+    const lineDivs = [...infoBlock.children].filter(
+      (el) => el && el.tagName === "DIV"
+    );
+    const lines = (lineDivs.length
+      ? lineDivs.map((el) => normalize(el.textContent))
+      : normalize(infoBlock.textContent).split(/(?=開催日時：|開催場所：|回答期限：)/))
+      .map((s) => normalize(s))
+      .filter(Boolean);
+    const isDateLine = (s) => /^開催日時[:：]/.test(normalize(s));
+    const dateLine = lines.find((s) => isDateLine(s));
+    if (!dateLine) return null;
+    const placeLine = lines.find((s) => /^開催場所[:：]/.test(normalize(s))) || "";
+
+    const session = parseLooseDateTime(dateLine.replace(/^開催日時[:：]/, "").trim());
+    if (!session) return null;
+    const relatedUrl =
+      extractRelatedUrl(card.querySelector(".editor-content")) || extractRelatedUrl(card);
+
+    const dateLineEl =
+      lineDivs.find((el) => isDateLine(el.textContent)) || null;
+
+    return {
+      mountEl: dateLineEl || infoBlock,
+      row: {
+        科目: title,
+        開催場所: placeLine.replace(/^開催場所[:：]/, "").trim(),
+        クラス: "",
+        関連URL: relatedUrl,
+      },
+      session: { ...session, dayNo: 0 },
+    };
+  };
+
+  const injectCommunityPostActions = () => {
+    const cards = [...document.querySelectorAll("div.text-black2.grid.grid-cols-1")];
+    if (!cards.length) return;
+
+    for (const card of cards) {
+      const parsed = parseCommunityPostCard(card);
+      if (!parsed) continue;
+      const { mountEl, row, session } = parsed;
+      if (mountEl.querySelector(`.${SOCIAL_ACTION_CLASS}`)) continue;
+
+      const action = createSocialActionElement(() => syncSchedulesToCalendar(row, [session]));
+      action.style.display = "inline-block";
+      action.style.marginLeft = "8px";
+      action.style.marginTop = "0";
+      action.style.verticalAlign = "baseline";
+
+      // keep this specific pattern inline with "開催日時" row text
+      mountEl.appendChild(action);
+      log("Injected community-post calendar action:", { title: row["科目"], session });
     }
   };
 
@@ -391,6 +566,8 @@
     detailInjectTimer = setTimeout(() => {
       injectDayDetailActions();
       injectEventScheduleActions();
+      injectSocialActions();
+      injectCommunityPostActions();
     }, 200);
   };
 

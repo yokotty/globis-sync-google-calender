@@ -25,6 +25,7 @@ test("buildCalendarEvents builds Google Calendar event bodies", () => {
     開催場所: "開催場所東京",
     クラス: "クラスA",
     講師: "講師樋口 知比呂",
+    関連URL: "https://example.com/meeting",
   };
   const sessions = [
     { date: "2026-01-08", start: "19:00", end: "22:00", timezone: "JST", dayNo: 1 },
@@ -39,6 +40,8 @@ test("buildCalendarEvents builds Google Calendar event bodies", () => {
   assert.equal(events[0].start.timeZone, "Asia/Tokyo");
   assert.equal(events[0].end.dateTime, "2026-01-08T22:00:00");
   assert.equal(events[0].extendedProperties.private.globisKey.includes("globis|"), true);
+  assert.equal(events[0].source.url, "https://example.com/meeting");
+  assert.equal(events[0].description.includes("関連URL: https://example.com/meeting"), true);
 });
 
 test("buildCalendarEvents omits Day suffix when dayNo is 0", () => {
@@ -54,4 +57,20 @@ test("buildCalendarEvents omits Day suffix when dayNo is 0", () => {
   const events = payload.buildCalendarEvents(row, sessions, "https://vc.globis.ac.jp/my/ev/030");
   assert.equal(events.length, 1);
   assert.equal(events[0].summary, "G-CHALLENGE 2025本選見学（東京校会場参加）");
+});
+
+test("buildCalendarEvents respects optional endDate", () => {
+  const row = {
+    科目: "Day4 懇親会",
+    開催場所: "京華茶楼 麹町店",
+    クラス: "",
+  };
+  const sessions = [
+    { date: "2026-02-19", start: "23:30", end: "00:30", endDate: "2026-02-20", timezone: "JST", dayNo: 0 },
+  ];
+
+  const events = payload.buildCalendarEvents(row, sessions, "https://vc.globis.ac.jp/my/cm/040");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].start.dateTime, "2026-02-19T23:30:00");
+  assert.equal(events[0].end.dateTime, "2026-02-20T00:30:00");
 });
