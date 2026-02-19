@@ -64,9 +64,6 @@
     return `${m[1]}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
   };
 
-  const parseLooseDateTime = (raw) =>
-    communityParser?.parseLooseDateTime?.(raw, 60) || null;
-
   const extractRelatedUrl = (root) => {
     if (!root) return "";
     const links = [...root.querySelectorAll("a[href]")];
@@ -181,25 +178,44 @@
     };
   };
 
-  const createDayActionElement = (onClick) => {
-    const wrap = document.createElement("span");
-    wrap.className = DAY_ACTION_CLASS;
-    wrap.style.display = "block";
-    wrap.style.marginTop = "6px";
+  const applyStyles = (el, styles) => {
+    Object.entries(styles || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) el.style[k] = String(v);
+    });
+  };
+
+  const createCalendarRegisterActionElement = ({
+    className,
+    containerTag = "div",
+    containerStyle,
+    linkStyle,
+    statusTag = "span",
+    statusStyle,
+    onClick,
+  }) => {
+    const wrap = document.createElement(containerTag);
+    if (className) wrap.className = className;
+    applyStyles(wrap, containerStyle);
 
     const link = document.createElement("a");
     link.href = "#";
     link.textContent = "Googleカレンダー登録";
-    link.style.fontSize = "12px";
-    link.style.fontWeight = "700";
-    link.style.color = "#0E357F";
-    link.style.textDecoration = "underline";
-    link.style.cursor = "pointer";
+    applyStyles(link, {
+      fontSize: "12px",
+      fontWeight: "700",
+      color: "#0E357F",
+      textDecoration: "underline",
+      cursor: "pointer",
+      ...linkStyle,
+    });
 
-    const status = document.createElement("span");
-    status.style.marginLeft = "8px";
-    status.style.fontSize = "12px";
-    status.style.color = "#666";
+    const status = document.createElement(statusTag);
+    applyStyles(status, {
+      marginLeft: "8px",
+      fontSize: "12px",
+      color: "#666",
+      ...statusStyle,
+    });
 
     const setBusy = (busy, text) => {
       link.style.pointerEvents = busy ? "none" : "auto";
@@ -221,6 +237,17 @@
     wrap.append(link, status);
     return wrap;
   };
+
+  const createDayActionElement = (onClick) =>
+    createCalendarRegisterActionElement({
+      className: DAY_ACTION_CLASS,
+      containerTag: "span",
+      containerStyle: {
+        display: "block",
+        marginTop: "6px",
+      },
+      onClick,
+    });
 
   const createBulkActionElement = (onClick) => {
     const wrap = document.createElement("div");
@@ -265,87 +292,28 @@
     return wrap;
   };
 
-  const createEventActionElement = (onClick) => {
-    const wrap = document.createElement("div");
-    wrap.className = EVENT_ACTION_CLASS;
-    wrap.style.marginTop = "8px";
-    wrap.style.width = "100%";
-    wrap.style.flexBasis = "100%";
-
-    const link = document.createElement("a");
-    link.href = "#";
-    link.textContent = "Googleカレンダー登録";
-    link.style.fontSize = "13px";
-    link.style.fontWeight = "700";
-    link.style.color = "#0E357F";
-    link.style.textDecoration = "underline";
-    link.style.cursor = "pointer";
-
-    const status = document.createElement("span");
-    status.style.marginLeft = "8px";
-    status.style.fontSize = "12px";
-    status.style.color = "#666";
-
-    const setBusy = (busy, text) => {
-      link.style.pointerEvents = busy ? "none" : "auto";
-      link.style.opacity = busy ? "0.6" : "1";
-      status.textContent = text || "";
-    };
-
-    link.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      try {
-        setBusy(true, "登録中...");
-        await onClick();
-        setBusy(false, "登録しました");
-      } catch (err) {
-        setBusy(false, `失敗: ${err.message}`);
-      }
+  const createEventActionElement = (onClick) =>
+    createCalendarRegisterActionElement({
+      className: EVENT_ACTION_CLASS,
+      containerStyle: {
+        marginTop: "8px",
+        width: "100%",
+        flexBasis: "100%",
+      },
+      linkStyle: {
+        fontSize: "13px",
+      },
+      onClick,
     });
 
-    wrap.append(link, status);
-    return wrap;
-  };
-
-  const createSocialActionElement = (onClick) => {
-    const wrap = document.createElement("div");
-    wrap.className = SOCIAL_ACTION_CLASS;
-    wrap.style.marginTop = "8px";
-
-    const link = document.createElement("a");
-    link.href = "#";
-    link.textContent = "Googleカレンダー登録";
-    link.style.fontSize = "12px";
-    link.style.fontWeight = "700";
-    link.style.color = "#0E357F";
-    link.style.textDecoration = "underline";
-    link.style.cursor = "pointer";
-
-    const status = document.createElement("span");
-    status.style.marginLeft = "8px";
-    status.style.fontSize = "12px";
-    status.style.color = "#666";
-
-    const setBusy = (busy, text) => {
-      link.style.pointerEvents = busy ? "none" : "auto";
-      link.style.opacity = busy ? "0.6" : "1";
-      status.textContent = text || "";
-    };
-
-    link.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      try {
-        setBusy(true, "登録中...");
-        await onClick();
-        setBusy(false, "登録しました");
-      } catch (err) {
-        setBusy(false, `失敗: ${err.message}`);
-      }
+  const createSocialActionElement = (onClick) =>
+    createCalendarRegisterActionElement({
+      className: SOCIAL_ACTION_CLASS,
+      containerStyle: {
+        marginTop: "8px",
+      },
+      onClick,
     });
-
-    wrap.append(link, status);
-    return wrap;
-  };
 
   const parseEventSection = (section) => {
     const title = normalize(section.querySelector("h2")?.textContent || "");
@@ -380,49 +348,55 @@
     };
   };
 
-  const injectEventScheduleActions = () => {
-    const sections = [...document.querySelectorAll("section.mb-2 > div.mb-8, div.mb-8")];
-    if (!sections.length) return;
+  const injectParsedActions = ({
+    elements,
+    parseElement,
+    actionClass,
+    createAction,
+    logLabel,
+    decorateAction,
+  }) => {
+    const list = Array.isArray(elements) ? elements : [];
+    if (!list.length) return;
 
-    for (const section of sections) {
-      const parsed = parseEventSection(section);
+    for (const el of list) {
+      const parsed = parseElement(el);
       if (!parsed) continue;
-      const { mountEl, row, session } = parsed;
-      if (mountEl.querySelector(`.${EVENT_ACTION_CLASS}`)) continue;
 
-      const action = createEventActionElement(() => syncSchedulesToCalendar(row, [session]));
+      const { mountEl, row, session } = parsed;
+      if (!mountEl || mountEl.querySelector(`.${actionClass}`)) continue;
+
+      const action = createAction(() => syncSchedulesToCalendar(row, [session]));
+      if (typeof decorateAction === "function") decorateAction(action, parsed);
       mountEl.appendChild(action);
-      log("Injected event calendar action:", { title: row["科目"], session });
+      log(logLabel, { title: row["科目"], session });
     }
   };
 
+  const injectEventScheduleActions = () =>
+    injectParsedActions({
+      elements: [...document.querySelectorAll("section.mb-2 > div.mb-8, div.mb-8")],
+      parseElement: parseEventSection,
+      actionClass: EVENT_ACTION_CLASS,
+      createAction: createEventActionElement,
+      logLabel: "Injected event calendar action:",
+    });
+
   const parseSocialCard = (card) => {
-    const title = normalize(card.querySelector("div.font-bold.text-sm")?.textContent || "");
-    if (!title) return null;
-
-    const lines = [...card.querySelectorAll("p")]
-      .map((el) => normalize(el.textContent))
-      .filter(Boolean);
-    const dateLine = lines.find((s) => s.startsWith("開催日時："));
-    if (!dateLine) return null;
-    const placeLine = lines.find((s) => s.startsWith("開催場所：")) || "";
-
-    const raw = dateLine.replace(/^開催日時：/, "").trim();
-    const session = parseLooseDateTime(raw);
-    if (!session) return null;
-    const location = placeLine.replace(/^開催場所：/, "").trim();
+    const parsed = communityParser?.extractSocialPostFromHtmlSnippet?.(card.innerHTML);
+    if (!parsed) return null;
     const relatedUrl =
-      extractRelatedUrl(card.querySelector(".editor-content")) || extractRelatedUrl(card);
+      parsed.row["関連URL"] ||
+      extractRelatedUrl(card.querySelector(".editor-content")) ||
+      extractRelatedUrl(card);
 
     return {
       mountEl: card.querySelector("div.font-medium.text-xs.leading-\\[18px\\].mb-2") || card,
       row: {
-        科目: title,
-        開催場所: location,
-        クラス: "",
+        ...parsed.row,
         関連URL: relatedUrl,
       },
-      session: { ...session, dayNo: 0 },
+      session: parsed.session,
     };
   };
 
@@ -431,31 +405,16 @@
       .filter((el) => normalize(el.textContent) === "勉強会 ・ 懇親会");
     if (!socialHeaders.length) return;
 
-    const cards = [...document.querySelectorAll("div.bg-gray1.rounded-lg.text-black2.pt-4.px-4.pb-5")];
-    if (!cards.length) return;
-
-    for (const card of cards) {
-      const parsed = parseSocialCard(card);
-      if (!parsed) continue;
-      const { mountEl, row, session } = parsed;
-      if (mountEl.querySelector(`.${SOCIAL_ACTION_CLASS}`)) continue;
-
-      const action = createSocialActionElement(() => syncSchedulesToCalendar(row, [session]));
-      mountEl.appendChild(action);
-      log("Injected social calendar action:", { title: row["科目"], session });
-    }
+    injectParsedActions({
+      elements: [...document.querySelectorAll("div.bg-gray1.rounded-lg.text-black2.pt-4.px-4.pb-5")],
+      parseElement: parseSocialCard,
+      actionClass: SOCIAL_ACTION_CLASS,
+      createAction: createSocialActionElement,
+      logLabel: "Injected social calendar action:",
+    });
   };
 
   const parseCommunityPostCard = (card) => {
-    const title = normalize(
-      card.querySelector(".flex.justify-start.items-center.font-bold.text-lg")?.textContent || ""
-    );
-    if (!title) return null;
-
-    const buttons = [...card.querySelectorAll("button")]
-      .map((b) => normalize(b.textContent));
-    if (!buttons.includes("参加") || !buttons.includes("不参加")) return null;
-
     const infoBlock = [...card.querySelectorAll("div")]
       .find((el) => normalize(el.textContent).includes("開催日時："));
     if (!infoBlock) return null;
@@ -463,20 +422,13 @@
     const lineDivs = [...infoBlock.children].filter(
       (el) => el && el.tagName === "DIV"
     );
-    const lines = (lineDivs.length
-      ? lineDivs.map((el) => normalize(el.textContent))
-      : normalize(infoBlock.textContent).split(/(?=開催日時：|開催場所：|回答期限：)/))
-      .map((s) => normalize(s))
-      .filter(Boolean);
     const isDateLine = (s) => /^開催日時[:：]/.test(normalize(s));
-    const dateLine = lines.find((s) => isDateLine(s));
-    if (!dateLine) return null;
-    const placeLine = lines.find((s) => /^開催場所[:：]/.test(normalize(s))) || "";
-
-    const session = parseLooseDateTime(dateLine.replace(/^開催日時[:：]/, "").trim());
-    if (!session) return null;
+    const parsed = communityParser?.extractCommunityPostFromHtmlSnippet?.(card.innerHTML);
+    if (!parsed) return null;
     const relatedUrl =
-      extractRelatedUrl(card.querySelector(".editor-content")) || extractRelatedUrl(card);
+      parsed.row["関連URL"] ||
+      extractRelatedUrl(card.querySelector(".editor-content")) ||
+      extractRelatedUrl(card);
 
     const dateLineEl =
       lineDivs.find((el) => isDateLine(el.textContent)) || null;
@@ -484,36 +436,27 @@
     return {
       mountEl: dateLineEl || infoBlock,
       row: {
-        科目: title,
-        開催場所: placeLine.replace(/^開催場所[:：]/, "").trim(),
-        クラス: "",
+        ...parsed.row,
         関連URL: relatedUrl,
       },
-      session: { ...session, dayNo: 0 },
+      session: parsed.session,
     };
   };
 
-  const injectCommunityPostActions = () => {
-    const cards = [...document.querySelectorAll("div.text-black2.grid.grid-cols-1")];
-    if (!cards.length) return;
-
-    for (const card of cards) {
-      const parsed = parseCommunityPostCard(card);
-      if (!parsed) continue;
-      const { mountEl, row, session } = parsed;
-      if (mountEl.querySelector(`.${SOCIAL_ACTION_CLASS}`)) continue;
-
-      const action = createSocialActionElement(() => syncSchedulesToCalendar(row, [session]));
-      action.style.display = "inline-block";
-      action.style.marginLeft = "8px";
-      action.style.marginTop = "0";
-      action.style.verticalAlign = "baseline";
-
-      // keep this specific pattern inline with "開催日時" row text
-      mountEl.appendChild(action);
-      log("Injected community-post calendar action:", { title: row["科目"], session });
-    }
-  };
+  const injectCommunityPostActions = () =>
+    injectParsedActions({
+      elements: [...document.querySelectorAll("div.text-black2.grid.grid-cols-1")],
+      parseElement: parseCommunityPostCard,
+      actionClass: SOCIAL_ACTION_CLASS,
+      createAction: createSocialActionElement,
+      logLabel: "Injected community-post calendar action:",
+      decorateAction: (action) => {
+        action.style.display = "inline-block";
+        action.style.marginLeft = "8px";
+        action.style.marginTop = "0";
+        action.style.verticalAlign = "baseline";
+      },
+    });
 
   const upsertBulkAction = (parsedList) => {
     const accordions = [...document.querySelectorAll('div[id^="day-accordion-"]')];

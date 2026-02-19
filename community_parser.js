@@ -46,17 +46,21 @@
     };
   };
 
-  const extractCommunityPostFromHtmlSnippet = (html) => {
+  const extractRelatedUrlFromHtml = (src) =>
+    normalize((String(src || "").match(/href="(https?:\/\/[^"]+)"/i) || [])[1]);
+
+  const extractPostCoreFromHtmlSnippet = (html) => {
     const src = String(html || "");
-    const title = normalize((src.match(/font-bold text-lg[^>]*>([^<]+)</) || [])[1]);
-    const hasAttend = />参加</.test(src);
-    const hasDecline = />不参加</.test(src);
+    const title =
+      normalize((src.match(/font-bold text-lg[^>]*>([^<]+)</) || [])[1]) ||
+      normalize((src.match(/font-bold text-sm[^>]*>([^<]+)</) || [])[1]);
     const dateRaw = normalize((src.match(/開催日時[:：]([^<]+)/) || [])[1]);
     const placeRaw = normalize((src.match(/開催場所[:：]([^<]+)/) || [])[1]);
-    const relatedUrl = normalize((src.match(/href="(https?:\/\/[^"]+)"/i) || [])[1]);
-    if (!title || !hasAttend || !hasDecline || !dateRaw) return null;
+    const relatedUrl = extractRelatedUrlFromHtml(src);
+    if (!title || !dateRaw) return null;
     const session = parseLooseDateTime(dateRaw);
     if (!session) return null;
+
     return {
       row: {
         科目: title,
@@ -68,8 +72,20 @@
     };
   };
 
+  const extractCommunityPostFromHtmlSnippet = (html) => {
+    const src = String(html || "");
+    const hasAttend = />参加</.test(src);
+    const hasDecline = />不参加</.test(src);
+    if (!hasAttend || !hasDecline) return null;
+    return extractPostCoreFromHtmlSnippet(src);
+  };
+
+  const extractSocialPostFromHtmlSnippet = (html) =>
+    extractPostCoreFromHtmlSnippet(html);
+
   return {
     parseLooseDateTime,
     extractCommunityPostFromHtmlSnippet,
+    extractSocialPostFromHtmlSnippet,
   };
 });
