@@ -1,4 +1,5 @@
 importScripts("calendar_payload.js");
+importScripts("calendar_dedupe.js");
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 const CALENDAR_ID = "primary";
@@ -23,15 +24,14 @@ const removeToken = (token) =>
     chrome.identity.removeCachedAuthToken({ token }, () => resolve());
   });
 
-const calendarInsert = async (token, event) => {
-  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`;
+const calendarApiRequest = async (token, url, options = {}) => {
   const res = await fetch(url, {
-    method: "POST",
+    method: options.method || "GET",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+      ...(options.contentType ? { "Content-Type": options.contentType } : {}),
     },
-    body: JSON.stringify(event),
+    ...(options.body ? { body: options.body } : {}),
   });
 
   if (!res.ok) {
@@ -44,18 +44,38 @@ const calendarInsert = async (token, event) => {
   return res.json();
 };
 
-const insertWithRetry = async (event) => {
+const requestWithRetry = async (requestFn) => {
   let token = await getAuthToken(true);
   try {
-    return await calendarInsert(token, event);
+    return await requestFn(token);
   } catch (err) {
     if (err.status === 401) {
       await removeToken(token);
       token = await getAuthToken(true);
-      return calendarInsert(token, event);
+      return requestFn(token);
     }
     throw err;
   }
+};
+
+const calendarInsert = async (token, event) => {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`;
+  return calendarApiRequest(token, url, {
+    method: "POST",
+    contentType: "application/json",
+    body: JSON.stringify(event),
+  });
+};
+
+const hasDuplicateByKey = async (token, event) => {
+  const key = event?.extendedProperties?.private?.globisKey;
+  if (!key) return false;
+  if (!globalThis.GlobisCalendarDedupe) return false;
+
+  const url = globalThis.GlobisCalendarDedupe.buildDuplicateLookupUrl(CALENDAR_ID, key);
+  if (!url) return false;
+  const result = await calendarApiRequest(token, url);
+  return globalThis.GlobisCalendarDedupe.hasDuplicateItems(result);
 };
 
 const createEvents = async ({ row, sessions, sourceUrl }) => {
@@ -69,8 +89,18 @@ const createEvents = async ({ row, sessions, sourceUrl }) => {
   }
 
   const created = [];
+  const skipped = [];
   for (const ev of events) {
-    const inserted = await insertWithRetry(ev);
+    const exists = await requestWithRetry((token) => hasDuplicateByKey(token, ev));
+    if (exists) {
+      skipped.push({
+        summary: ev.summary,
+        key: ev?.extendedProperties?.private?.globisKey || "",
+      });
+      continue;
+    }
+
+    const inserted = await requestWithRetry((token) => calendarInsert(token, ev));
     created.push({
       id: inserted.id,
       htmlLink: inserted.htmlLink,
@@ -82,7 +112,9 @@ const createEvents = async ({ row, sessions, sourceUrl }) => {
 
   return {
     createdCount: created.length,
+    skippedCount: skipped.length,
     created,
+    skipped,
   };
 };
 
