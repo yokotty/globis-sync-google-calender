@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "GLOBIS Schedule Extractor PoC",
+  "name": "GLOBIS マイページ Googleカレンダー連携",
   "version": "0.1.0",
   "description": "Extract class schedules and create Google Calendar events.",
   "permissions": ["identity"],
