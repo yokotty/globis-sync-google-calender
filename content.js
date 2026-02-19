@@ -5,6 +5,8 @@
   const LOG_PREFIX = "[GLOBIS PoC]";
   const networkEvents = [];
   const parser = window.GlobisScheduleParser;
+  const ACTION_ID = "globis-calendar-sync-action";
+  let latestSyncContext = null;
 
   const log = (...args) => console.log(LOG_PREFIX, ...args);
   const sendMessage = (message) =>
@@ -47,8 +49,13 @@
     return data;
   };
 
-  const extractModalLikeSchedules = () => {
-    const candidates = [...document.querySelectorAll('[role="dialog"], .tippy-box, .modal, [class*="modal"], [class*="dialog"]')];
+  const findScheduleModal = () =>
+    document.querySelector("#base-modal") || document.querySelector('[role="dialog"]');
+
+  const extractModalLikeSchedules = (rootEl) => {
+    const scope = rootEl || document;
+    const candidates = [...scope.querySelectorAll('[role="dialog"], #base-modal, .tippy-box, .modal, [class*="modal"], [class*="dialog"]')];
+    if (scope.nodeType === 1) candidates.unshift(scope);
     const lines = [];
 
     for (const el of candidates) {
@@ -62,6 +69,75 @@
     }
 
     return lines;
+  };
+
+  const createActionElement = () => {
+    const wrap = document.createElement("div");
+    wrap.id = ACTION_ID;
+    wrap.style.marginTop = "8px";
+    wrap.style.marginBottom = "16px";
+    wrap.style.textAlign = "center";
+
+    const link = document.createElement("a");
+    link.href = "#";
+    link.textContent = "Googleカレンダーにスケジュール登録";
+    link.style.fontSize = "13px";
+    link.style.fontWeight = "700";
+    link.style.color = "#0E357F";
+    link.style.textDecoration = "underline";
+    link.style.cursor = "pointer";
+    link.setAttribute("data-state", "ready");
+
+    const status = document.createElement("div");
+    status.style.fontSize = "12px";
+    status.style.marginTop = "8px";
+    status.style.color = "#555";
+    status.textContent = "";
+
+    const setBusy = (busy, message) => {
+      link.style.pointerEvents = busy ? "none" : "auto";
+      link.style.opacity = busy ? "0.6" : "1";
+      status.textContent = message || "";
+    };
+
+    link.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      if (!latestSyncContext) {
+        log("No sync context is prepared");
+        return;
+      }
+
+      try {
+        setBusy(true, "Googleカレンダーに登録中...");
+        await syncSchedulesToCalendar(latestSyncContext.row, latestSyncContext.parsedSchedules);
+        setBusy(false, "登録しました。Googleカレンダーを確認してください。");
+      } catch (err) {
+        setBusy(false, `登録に失敗しました: ${err.message}`);
+      }
+    });
+
+    wrap.append(link, status);
+    return wrap;
+  };
+
+  const upsertModalAction = (row, parsedSchedules) => {
+    const modal = findScheduleModal();
+    const modalContent = modal?.querySelector("#modal-content");
+    if (!modal || !modalContent) {
+      log("Schedule modal not found for action link injection");
+      return false;
+    }
+
+    latestSyncContext = { row, parsedSchedules };
+
+    let action = modalContent.querySelector(`#${ACTION_ID}`);
+    if (!action) {
+      action = createActionElement();
+      modalContent.appendChild(action);
+      log("Injected calendar sync link into modal");
+    }
+
+    return true;
   };
 
   const printRecentNetworkEvents = (fromTs) => {
@@ -92,12 +168,6 @@
     const schedules = Array.isArray(parsedSchedules) ? parsedSchedules : [];
     if (!schedules.length) {
       log("Skip calendar sync: no parsed schedules");
-      return;
-    }
-
-    const confirmText = `Googleカレンダーに ${schedules.length} 件の予定を作成します。続行しますか？`;
-    if (!window.confirm(confirmText)) {
-      log("Calendar sync canceled by user");
       return;
     }
 
@@ -147,15 +217,15 @@
       setTimeout(() => {
         printRecentNetworkEvents(clickTs);
 
-        const modalSchedules = extractModalLikeSchedules();
+        const modalSchedules = extractModalLikeSchedules(findScheduleModal());
         if (modalSchedules.length) {
           log("Modal-like schedule text candidates:", modalSchedules);
           if (parser && typeof parser.parseScheduleCandidates === "function") {
             const parsed = parser.parseScheduleCandidates(modalSchedules, "JST");
             log("Parsed schedule entries:", parsed);
-            syncSchedulesToCalendar(row, parsed).catch((err) => {
-              log("Calendar sync failed:", err.message);
-            });
+            if (!upsertModalAction(row, parsed)) {
+              log("Calendar link injection skipped");
+            }
           } else {
             log("Parser is not available");
           }

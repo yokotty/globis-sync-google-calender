@@ -33,8 +33,8 @@ test("buildCalendarEvents builds Google Calendar event bodies", () => {
 
   const events = payload.buildCalendarEvents(row, sessions, "https://vc.globis.ac.jp/my/zr/530");
   assert.equal(events.length, 2);
-  assert.equal(events[0].summary, "(MBA)人材マネジメント Day 1");
-  assert.equal(events[0].location, "東京");
+  assert.equal(events[0].summary, "(MBA)人材マネジメント 東京 Aクラス Day1");
+  assert.equal(events[0].location, "");
   assert.equal(events[0].start.dateTime, "2026-01-08T19:00:00");
   assert.equal(events[0].start.timeZone, "Asia/Tokyo");
   assert.equal(events[0].end.dateTime, "2026-01-08T22:00:00");

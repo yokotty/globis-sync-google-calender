@@ -29,6 +29,11 @@
   };
 
   const toDateTime = (date, hm) => `${date}T${hm}:00`;
+  const classLabel = (value) => {
+    const v = normalize(value);
+    if (!v) return "";
+    return v.endsWith("クラス") ? v : `${v}クラス`;
+  };
 
   const buildDescription = (row, session, sourceUrl) => {
     const lines = [
@@ -59,9 +64,9 @@
 
     return list.map((session) => {
       const timeZone = TZ_MAP[session.timezone] || "Asia/Tokyo";
-      const summaryBase = row["科目"] || "GLOBIS Class";
-      const summary = `${summaryBase} Day ${session.dayNo}`;
-      const location = row["開催場所"] || "";
+      const summaryParts = [row["科目"] || "GLOBIS Class", row["開催場所"], classLabel(row["クラス"]), `Day${session.dayNo}`].filter(Boolean);
+      const summary = summaryParts.join(" ");
+      const location = "";
       const description = buildDescription(row, session, sourceUrl);
 
       return {
