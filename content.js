@@ -10,8 +10,13 @@
   const BULK_ACTION_ID = "globis-bulk-calendar-action";
   const EVENT_ACTION_CLASS = "globis-event-calendar-action";
   const SOCIAL_ACTION_CLASS = "globis-social-calendar-action";
+  const URL_POLL_MS = 500;
   let latestSyncContext = null;
   let detailInjectTimer = null;
+  let bootstrapped = false;
+  let observerStarted = false;
+  let urlPollTimer = null;
+  let lastUrl = location.href;
 
   const log = () => {};
   const sendMessage = (message) =>
@@ -712,9 +717,53 @@
   const observer = new MutationObserver(() => {
     scheduleDayDetailInjection();
   });
-  observer.observe(document.body, { childList: true, subtree: true });
-  scheduleDayDetailInjection();
+  const onUrlChange = () => {
+    if (lastUrl === location.href) return;
+    lastUrl = location.href;
+    scheduleDayDetailInjection();
+  };
 
-  injectScript();
-  log("content script ready");
+  const hookHistory = () => {
+    const originalPushState = history.pushState;
+    history.pushState = function (...args) {
+      originalPushState.apply(this, args);
+      onUrlChange();
+    };
+
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function (...args) {
+      originalReplaceState.apply(this, args);
+      onUrlChange();
+    };
+
+    window.addEventListener("popstate", onUrlChange);
+  };
+
+  const startUrlPoll = () => {
+    if (urlPollTimer) return;
+    urlPollTimer = setInterval(onUrlChange, URL_POLL_MS);
+  };
+
+  const startObserver = () => {
+    if (observerStarted || !document.body) return;
+    observerStarted = true;
+    observer.observe(document.body, { childList: true, subtree: true });
+    scheduleDayDetailInjection();
+  };
+
+  const bootstrap = () => {
+    if (bootstrapped) return;
+    bootstrapped = true;
+    hookHistory();
+    startUrlPoll();
+    startObserver();
+    injectScript();
+    log("content script ready");
+  };
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", bootstrap, { once: true });
+  } else {
+    bootstrap();
+  }
 })();
