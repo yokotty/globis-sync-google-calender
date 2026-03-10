@@ -5,6 +5,7 @@
   const networkEvents = [];
   const parser = window.GlobisScheduleParser;
   const communityParser = window.GlobisCommunityParser;
+  const modalRowPatch = window.GlobisModalRowPatch;
   const ACTION_ID = "globis-calendar-sync-action";
   const DAY_ACTION_CLASS = "globis-day-calendar-action";
   const BULK_ACTION_ID = "globis-bulk-calendar-action";
@@ -77,6 +78,24 @@
       if (/^https?:\/\//i.test(href)) return href;
     }
     return "";
+  };
+
+  const extractModalMetadataPatch = (root) => {
+    if (!root || !modalRowPatch || typeof modalRowPatch.extractModalRowPatch !== "function") {
+      return {};
+    }
+
+    const links = [...root.querySelectorAll("a[href]")]
+      .map((link) => ({
+        text: normalize(link.textContent),
+        href: normalize(link.getAttribute("href") || ""),
+      }))
+      .filter((link) => link.text || link.href);
+
+    return modalRowPatch.extractModalRowPatch({
+      modalText: root.textContent || "",
+      links,
+    });
   };
 
   const getPageMeta = () => {
@@ -696,11 +715,13 @@
 
         const modalSchedules = extractModalLikeSchedules(findScheduleModal());
         if (modalSchedules.length) {
+          const modalMetadata = extractModalMetadataPatch(findScheduleModal());
+          const mergedRow = { ...row, ...modalMetadata };
           log("Modal-like schedule text candidates:", modalSchedules);
           if (parser && typeof parser.parseScheduleCandidates === "function") {
             const parsed = parser.parseScheduleCandidates(modalSchedules, "JST");
             log("Parsed schedule entries:", parsed);
-            if (!upsertModalAction(row, parsed)) {
+            if (!upsertModalAction(mergedRow, parsed)) {
               log("Calendar link injection skipped");
             }
           } else {
